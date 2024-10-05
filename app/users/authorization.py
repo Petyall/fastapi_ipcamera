@@ -53,6 +53,6 @@ async def authenticate_user(email: EmailStr, password: str) -> User | None:
     Возвращает пользователя, если аутентификация успешна, иначе None.
     """
     user = await UserService.find_one_or_none(email=email)
-    if user and verify_password(password, user.hashed_password):
+    if user and verify_password(password, user.password):
         return user
     return None

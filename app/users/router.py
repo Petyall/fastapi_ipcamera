@@ -1,14 +1,26 @@
 from fastapi import APIRouter, Depends, Response, status
-from datetime import datetime
-from jose import JWTError, jwt
-
+from uuid import UUID
 from app.config import settings
 from app.users.dependencies import get_current_user, check_current_user_and_role, get_refresh_token
 from app.users.models import User
-from app.users.authorization import create_refresh_token, get_password_hash, authenticate_user, create_access_token, verify_password
-from app.users.services import UserService, RoleService
-from app.users.schemas import UserCreate, UserLogin, UserPasswordChange
-from app.exceptions import IncorrectFormatTokenException, UserAlreadyExistsException, UserIsNotPresentException, UserNotFoundException, IncorrectEmailOrPasswordException
+from app.users.authorization import (
+    create_refresh_token,
+    get_password_hash,
+    authenticate_user,
+    create_access_token,
+    verify_password,
+)
+from app.users.services import UserService
+from app.users.schemas import UserCreate, UserLogin, User as UserSchema
+from app.exceptions import (
+    IncorrectFormatTokenException,
+    UserAlreadyExistsException,
+    UserIsNotPresentException,
+    UserNotFoundException,
+    IncorrectEmailOrPasswordException,
+)
+from datetime import datetime
+import jwt
 
 router = APIRouter(
     prefix="/auth",
@@ -16,7 +28,7 @@ router = APIRouter(
 )
 
 
-@router.post("/register", status_code=status.HTTP_201_CREATED)
+@router.post("/register", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def register_user(user_data: UserCreate) -> dict:
     """
     Регистрация пользователя
@@ -28,16 +40,17 @@ async def register_user(user_data: UserCreate) -> dict:
     hashed_password = get_password_hash(user_data.password)
     await UserService.add(
         email=user_data.email,
-        hashed_password=hashed_password,
-        is_confirmed=False
+        password=hashed_password,
+        first_name=user_data.first_name,
+        last_name=user_data.last_name,
+        paternal_name=user_data.paternal_name,
+        phone_number=user_data.phone_number,
     )
-
-    await UserService.update_user(email=user_data.email, confirmation_sent=datetime.now())
     
-    return {"message": f"Для подтверждения пользователя {user_data.email} было отправлено письмо с ссылкой для завершения регистрации"}
+    return {"message": f"Пользователь '{user_data.first_name} {user_data.last_name}' успешно создан"}
 
 
-@router.post("/login", status_code=status.HTTP_200_OK)
+@router.post("/login", response_model=dict, status_code=status.HTTP_200_OK)
 async def login_user(response: Response, user_data: UserLogin) -> dict:
     """
     Авторизация пользователя
@@ -63,29 +76,11 @@ async def login_user(response: Response, user_data: UserLogin) -> dict:
     return {"message": f"Пользователь {user_data.email} успешно авторизован"}
 
 
-@router.post("/password_change", status_code=status.HTTP_200_OK)
-async def password_change(user_data: UserPasswordChange, current_user: User = Depends(get_current_user)) -> dict:
-    """
-    Смена пароля
-    """
-    user = await UserService.find_one_or_none(email=current_user.email)
-
-    if not user:
-        raise IncorrectEmailOrPasswordException
-    
-    if not verify_password(user_data.current_password, user.hashed_password):
-        raise IncorrectEmailOrPasswordException
-    
-    new_password_hashed = get_password_hash(user_data.new_password)
-    await UserService.update_user(email=current_user.email, hashed_password=new_password_hashed)
-    return {"message": f"Пароль для {current_user.email} успешно изменен"}
-
-
-@router.post("/refresh_token", status_code=status.HTTP_200_OK)
+@router.post("/refresh_token", response_model=dict, status_code=status.HTTP_200_OK)
 async def refresh_token(response: Response, refresh_token: str = Depends(get_refresh_token)) -> dict:
     try:
         payload = jwt.decode(refresh_token, settings.REFRESH_SECRET_KEY, algorithms=[settings.ALGORITHM])
-    except JWTError:
+    except jwt.JWTError:
         raise IncorrectFormatTokenException
 
     user_id: str = payload.get("sub")
@@ -105,7 +100,7 @@ async def refresh_token(response: Response, refresh_token: str = Depends(get_ref
     return {"message": "Access токен успешно обновлен."}
 
 
-@router.post("/logout", status_code=status.HTTP_200_OK)
+@router.post("/logout", response_model=dict, status_code=status.HTTP_200_OK)
 async def logout_user(response: Response) -> dict:
     """
     Выход пользователя
@@ -115,30 +110,17 @@ async def logout_user(response: Response) -> dict:
     return {"message": "До свидания!"}
 
 
-@router.get("/me", status_code=status.HTTP_200_OK)
-async def read_users_me(current_user: User = Depends(get_current_user)):
+@router.get("/me", response_model=UserSchema, status_code=status.HTTP_200_OK)
+async def read_users_me(current_user: UserSchema = Depends(get_current_user)):
     """
     Получение информации о пользователе
     """
     return current_user
 
 
-@router.get("/all", status_code=status.HTTP_200_OK)
-async def read_users_all(current_user: User = Depends(check_current_user_and_role)):
+@router.get("/all", response_model=list[UserSchema], status_code=status.HTTP_200_OK)
+async def read_users_all(current_user: UserSchema = Depends(check_current_user_and_role)):
     """
     Получение информации обо всех пользователях
     """
     return await UserService.find_all()
-
-
-@router.get("/id/{user_id}", status_code=status.HTTP_200_OK)
-async def read_users_id(user_id: int, current_user: User = Depends(check_current_user_and_role)):
-    """
-    Получение информации о пользователе по id
-    """
-    return await UserService.find_one_or_none(id=user_id)
-
-
-@router.get("/add_role", status_code=status.HTTP_200_OK)
-async def add_role(name: str):
-    return await RoleService.add(name=name)
