@@ -5,7 +5,7 @@ from pydantic import EmailStr
 
 from app.users.services import UserService
 from app.config import settings
-from app.users.models import User
+from app.models import User
 
 
 # Переменная с алгоритмами хеширования пароля

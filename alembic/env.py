@@ -2,7 +2,7 @@ from logging.config import fileConfig
 from alembic import context
 
 from app.database import engine
-from app.users.models import Base
+from app.models import Base
 
 
 config = context.config

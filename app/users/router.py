@@ -6,7 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from app.config import settings
 from app.users.services import UserService
 from app.users.schemas import UserCreate, UserLogin, User as UserSchema
-from app.users.dependencies import get_current_user, check_current_user_and_role, get_refresh_token, check_is_current_user_root
+from app.users.dependencies import get_current_user, get_refresh_token, check_is_current_user_root
 from app.users.authorization import (
     create_refresh_token,
     get_password_hash,
@@ -122,7 +122,7 @@ async def read_users_me(current_user: UserSchema = Depends(get_current_user)):
 
 
 @router.get("/all", response_model=list[UserSchema], status_code=status.HTTP_200_OK)
-async def read_users_all(current_user: UserSchema = Depends(check_current_user_and_role)):
+async def read_users_all(current_user: UserSchema = Depends(check_is_current_user_root)):
     """
     Получение информации обо всех пользователях
     """

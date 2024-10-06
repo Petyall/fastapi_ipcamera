@@ -51,3 +51,23 @@ class IncorrectFormatTokenException(ProjectException):
 class IncorrectEmailOrPasswordException(ProjectException):
     status_code=status.HTTP_401_UNAUTHORIZED
     detail="Неверная почта или пароль"
+
+
+class UserCamerasNotFoundException(ProjectException):
+    status_code=status.HTTP_404_NOT_FOUND
+    detail="У данного пользователя не найдены камеры"
+
+
+class UserCameraNotFoundException(ProjectException):
+    status_code=status.HTTP_404_NOT_FOUND
+    detail="Камера с таким ID не найдена"
+
+
+class UserFavoriteCamerasNotFoundException(ProjectException):
+    status_code=status.HTTP_404_NOT_FOUND
+    detail="У данного пользователя не найдены избранные камеры"
+
+
+class UserAlreadyHasThisFavoriteCameraException(ProjectException):
+    status_code=status.HTTP_409_CONFLICT
+    detail="Пользователь уже добавил эту камеру в избранное"

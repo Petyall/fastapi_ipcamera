@@ -2,12 +2,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.middleware import RefreshTokenMiddleware
-from app.users.router import router as router_users
+from app.users.router import router as users_router
+from app.cameras.router import router as cameras_router
 
 
 app = FastAPI()
 
-app.include_router(router_users)
+app.include_router(users_router)
+app.include_router(cameras_router)
 
 origins = ["*"]
 
