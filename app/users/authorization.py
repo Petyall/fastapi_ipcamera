@@ -25,7 +25,7 @@ def verify_password(plain_password, hashed_password) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
 
-def create_access_token(data: dict, expires_delta: timedelta = timedelta(minutes=30)) -> str:
+def create_access_token(data: dict, expires_delta: timedelta = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)) -> str:
     """
     Создание JWT токена с указанными данными и временем жизни.
     """
@@ -36,7 +36,7 @@ def create_access_token(data: dict, expires_delta: timedelta = timedelta(minutes
     return encoded_jwt
 
 
-def create_refresh_token(data: dict, expires_delta: timedelta = timedelta(days=30)) -> str:
+def create_refresh_token(data: dict, expires_delta: timedelta = timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)) -> str:
     """
     Создание JWT refresh токена с указанными данными и временем жизни.
     """

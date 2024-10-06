@@ -1,11 +1,11 @@
 from datetime import datetime
-from fastapi import Request, Depends
 from jose import jwt, JWTError
+from fastapi import Request, Depends
 
-from app.users.services import UserService
 from app.config import settings
-from app.exceptions import TokenAbsentException, IncorrectFormatTokenException, TokenExpiredException, UserIsNotPresentException, NotEnoughAuthorityException
 from app.users.models import User
+from app.users.services import UserService
+from app.exceptions import TokenAbsentException, IncorrectFormatTokenException, TokenExpiredException, UserIsNotPresentException, NotEnoughAuthorityException
 
 
 async def get_token(request: Request) -> str:

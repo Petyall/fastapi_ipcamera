@@ -1,14 +1,14 @@
-from pydantic import BaseModel, EmailStr, Field
 from uuid import UUID
-from typing import Optional
 from datetime import datetime
+from pydantic import BaseModel, EmailStr, Field
+
 
 class UserBase(BaseModel):
     email: EmailStr
     first_name: str
     last_name: str
     paternal_name: str
-    phone_number: str = Field(default='000-000-0000')  # Значение по умолчанию
+    phone_number: str = Field(default='000-000-0000')
 
 
 class UserCreate(UserBase):
@@ -21,11 +21,11 @@ class UserLogin(BaseModel):
 
 
 class User(UserBase):
-    id: UUID  # Изменено на UUID
+    id: UUID
     role: str
     ban: bool
-    created_at: datetime  # Если нужно время создания в формате строки
-    updated_at: datetime  # Если нужно время обновления в формате строки
+    created_at: datetime
+    updated_at: datetime
 
     class Config:
         orm_mode = True

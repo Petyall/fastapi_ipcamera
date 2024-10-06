@@ -1,7 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
 from app.middleware import RefreshTokenMiddleware
 from app.users.router import router as router_users
+
 
 app = FastAPI()
 

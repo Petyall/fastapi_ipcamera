@@ -1,9 +1,11 @@
-from fastapi import Request, Response
-from starlette.middleware.base import BaseHTTPMiddleware
-from jose import ExpiredSignatureError, jwt, JWTError
+from fastapi import Request
 from datetime import datetime
+from jose import ExpiredSignatureError, jwt, JWTError
+from starlette.middleware.base import BaseHTTPMiddleware
+
 from app.config import settings
 from app.users.authorization import create_access_token
+
 
 class RefreshTokenMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):

@@ -1,26 +1,24 @@
+import jwt
+
 from fastapi import APIRouter, Depends, Response, status
-from uuid import UUID
+
 from app.config import settings
+from app.users.services import UserService
+from app.users.schemas import UserCreate, UserLogin, User as UserSchema
 from app.users.dependencies import get_current_user, check_current_user_and_role, get_refresh_token
-from app.users.models import User
 from app.users.authorization import (
     create_refresh_token,
     get_password_hash,
     authenticate_user,
     create_access_token,
-    verify_password,
 )
-from app.users.services import UserService
-from app.users.schemas import UserCreate, UserLogin, User as UserSchema
 from app.exceptions import (
     IncorrectFormatTokenException,
     UserAlreadyExistsException,
     UserIsNotPresentException,
-    UserNotFoundException,
     IncorrectEmailOrPasswordException,
 )
-from datetime import datetime
-import jwt
+
 
 router = APIRouter(
     prefix="/auth",

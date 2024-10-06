@@ -1,9 +1,10 @@
-from sqlalchemy import Column, String, Integer, Boolean, DateTime, ForeignKey, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import relationship
 from uuid import uuid4
 from datetime import datetime
+from sqlalchemy.orm import relationship
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy import Column, String, Integer, Boolean, DateTime, ForeignKey, UniqueConstraint
+
 
 Base = declarative_base()
 
@@ -12,6 +13,7 @@ class UserRole:
     USER = 'USER'
     ADMIN = 'ADMIN'
     ROOT = 'ROOT'
+
 
 class User(Base):
     __tablename__ = 'users'
@@ -51,6 +53,7 @@ class Camera(Base):
     def __str__(self):
         return f"Camera {self.name}"
 
+
 class UserCamera(Base):
     __tablename__ = 'user_cameras'
 
@@ -64,6 +67,7 @@ class UserCamera(Base):
 
     def __str__(self):
         return f"UserCamera: User {self.user_id} - Camera {self.camera_id}"
+
 
 class FavoriteCamera(Base):
     __tablename__ = 'favorite_cameras'
