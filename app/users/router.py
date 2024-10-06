@@ -1,11 +1,12 @@
 import jwt
 
 from fastapi import APIRouter, Depends, Response, status
+from sqlalchemy.exc import IntegrityError
 
 from app.config import settings
 from app.users.services import UserService
 from app.users.schemas import UserCreate, UserLogin, User as UserSchema
-from app.users.dependencies import get_current_user, check_current_user_and_role, get_refresh_token
+from app.users.dependencies import get_current_user, check_current_user_and_role, get_refresh_token, check_is_current_user_root
 from app.users.authorization import (
     create_refresh_token,
     get_password_hash,
@@ -17,6 +18,7 @@ from app.exceptions import (
     UserAlreadyExistsException,
     UserIsNotPresentException,
     IncorrectEmailOrPasswordException,
+    UniquePhoneNumberException
 )
 
 
@@ -27,7 +29,7 @@ router = APIRouter(
 
 
 @router.post("/register", response_model=dict, status_code=status.HTTP_201_CREATED)
-async def register_user(user_data: UserCreate) -> dict:
+async def register_user(user_data: UserCreate, current_user: UserSchema = Depends(check_is_current_user_root)) -> dict:
     """
     Регистрация пользователя
     """
@@ -36,14 +38,17 @@ async def register_user(user_data: UserCreate) -> dict:
         raise UserAlreadyExistsException
 
     hashed_password = get_password_hash(user_data.password)
-    await UserService.add(
-        email=user_data.email,
-        password=hashed_password,
-        first_name=user_data.first_name,
-        last_name=user_data.last_name,
-        paternal_name=user_data.paternal_name,
-        phone_number=user_data.phone_number,
-    )
+    try:
+        await UserService.add(
+            email=user_data.email,
+            password=hashed_password,
+            first_name=user_data.first_name,
+            last_name=user_data.last_name,
+            paternal_name=user_data.paternal_name,
+            phone_number=user_data.phone_number,
+        )
+    except IntegrityError:
+        raise UniquePhoneNumberException
     
     return {"message": f"Пользователь '{user_data.first_name} {user_data.last_name}' успешно создан"}
 

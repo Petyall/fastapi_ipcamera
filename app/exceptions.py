@@ -14,6 +14,11 @@ class UserAlreadyExistsException(ProjectException):
     detail="Пользователь уже существует"
 
 
+class UniquePhoneNumberException(ProjectException):
+    status_code=status.HTTP_409_CONFLICT
+    detail="Пользователь с данным номером телефона уже существует"
+
+
 class UserNotFoundException(ProjectException):
     status_code=status.HTTP_404_NOT_FOUND
     detail="Пользователь не найден"

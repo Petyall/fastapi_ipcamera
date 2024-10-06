@@ -66,6 +66,12 @@ async def check_current_user_and_role(user: User = Depends(get_current_user)):
     """
     Проверка роли текущего пользователя. Возвращает пользователя, если у него достаточно прав.
     """
-    if user.role != "USER":
+    if user.role != "ROOT":
+        raise NotEnoughAuthorityException
+    return user
+
+
+async def check_is_current_user_root(user: User = Depends(get_current_user)):
+    if user.role != "ROOT":
         raise NotEnoughAuthorityException
     return user
