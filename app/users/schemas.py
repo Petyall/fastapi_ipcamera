@@ -12,8 +12,15 @@ class UserBase(BaseModel):
 
 
 class UserCreate(UserBase):
+    role: str = Field(default='USER')
     password: str
 
+
+class UserUpdate(UserBase):
+    role: str
+    password: str
+    ban: str
+    
 
 class UserLogin(BaseModel):
     email: EmailStr

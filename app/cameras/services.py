@@ -1,19 +1,12 @@
-from app.models import Camera, UserCamera, FavoriteCamera
 from app.services import BaseRequests
 from app.database import async_session_maker
+from app.models import Camera, UserCamera, FavoriteCamera
 
-from sqlalchemy import delete, update
+from sqlalchemy import delete
+
 
 class CameraService(BaseRequests):
     model = Camera
-
-    @classmethod
-    async def update(cls, id, **data):
-        """Обновление объектов"""
-        async with async_session_maker() as session:
-            query = update(cls.model).where(cls.model.id == id).values(**data)
-            await session.execute(query)
-            await session.commit()
 
 
 class UserCameraService(BaseRequests):

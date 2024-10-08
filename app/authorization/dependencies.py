@@ -2,10 +2,16 @@ from datetime import datetime
 from jose import jwt, JWTError
 from fastapi import Request, Depends
 
-from app.config import settings
 from app.models import User
+from app.config import settings
 from app.users.services import UserService
-from app.exceptions import TokenAbsentException, IncorrectFormatTokenException, TokenExpiredException, UserIsNotPresentException, NotEnoughAuthorityException
+from app.exceptions import (
+    TokenAbsentException, 
+    IncorrectFormatTokenException, 
+    TokenExpiredException, 
+    UserIsNotPresentException, 
+    NotEnoughAuthorityException
+)
 
 
 async def get_token(request: Request) -> str:
@@ -63,13 +69,21 @@ async def get_current_user(token: str = Depends(get_token)) -> User:
 
 
 async def check_is_current_user_root(user: User = Depends(get_current_user)):
+    """
+    Проверка наличия у пользователя root прав
+    """
     if user.role != "ROOT":
         raise NotEnoughAuthorityException
+    
     return user
 
 
 async def check_is_current_user_admin(user: User = Depends(get_current_user)):
+    """
+    Проверка наличия у пользователя admin прав
+    """
     if user.role != "ADMIN":
         if user.role != "ROOT":
             raise NotEnoughAuthorityException
+        
     return user

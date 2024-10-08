@@ -71,3 +71,13 @@ class UserFavoriteCamerasNotFoundException(ProjectException):
 class UserAlreadyHasThisFavoriteCameraException(ProjectException):
     status_code=status.HTTP_409_CONFLICT
     detail="Пользователь уже добавил эту камеру в избранное"
+
+
+class UnexpectedErrorException(ProjectException):
+    status_code=status.HTTP_400_BAD_REQUEST
+    detail="Неизвестная ошибка"
+
+
+class IncorrectUserUpdateDataException(ProjectException):
+    status_code=status.HTTP_409_CONFLICT
+    detail="Введенные данные не соответствуют необходимому формату"

@@ -1,11 +1,11 @@
-from datetime import datetime, timedelta
 from jose import jwt
-from passlib.context import CryptContext
 from pydantic import EmailStr
+from datetime import datetime, timedelta
+from passlib.context import CryptContext
 
-from app.users.services import UserService
-from app.config import settings
 from app.models import User
+from app.config import settings
+from app.users.services import UserService
 
 
 # Переменная с алгоритмами хеширования пароля

@@ -1,12 +1,18 @@
-from fastapi import APIRouter, Depends, Response, status
-from app.cameras.schemas import UserCameraBase, FavoriteCameraBase, CameraCreate, CameraBase, CameraUpdate, Camera
-from app.users.schemas import User as UserSchema
-from app.users.dependencies import get_current_user, check_is_current_user_admin
-from app.cameras.services import CameraService, UserCameraService, UserFavoriteCameraService
-from app.exceptions import UserCamerasNotFoundException, UserCameraNotFoundException, UserFavoriteCamerasNotFoundException, UserAlreadyHasThisFavoriteCameraException
-
-from datetime import datetime
 from uuid import UUID
+from datetime import datetime
+from fastapi import APIRouter, Depends, status
+
+from app.users.schemas import User as UserSchema
+from app.authorization.dependencies import get_current_user, check_is_current_user_admin
+from app.cameras.services import CameraService, UserCameraService, UserFavoriteCameraService
+from app.cameras.schemas import UserCameraBase, FavoriteCameraBase, CameraCreate, CameraUpdate, Camera
+from app.exceptions import (
+    UserCamerasNotFoundException, 
+    UserCameraNotFoundException, 
+    UserFavoriteCamerasNotFoundException, 
+    UserAlreadyHasThisFavoriteCameraException
+    )
+
 
 router = APIRouter(
     prefix="/cameras",
@@ -79,6 +85,7 @@ async def add_camera(camera_data: CameraCreate, current_user: UserSchema = Depen
     )
     return {"message": f"Камера успешно создана"}
 
+
 @router.delete("/{camera_id}", response_model=dict, status_code=status.HTTP_200_OK)
 async def delete_camera(camera_id: int, current_user: UserSchema = Depends(check_is_current_user_admin)) -> dict:
     camera = await CameraService.find_one_or_none(id=camera_id)
@@ -87,6 +94,7 @@ async def delete_camera(camera_id: int, current_user: UserSchema = Depends(check
     
     await CameraService.delete(id=camera_id)
     return {"message": f"Камера с ID {camera_id} успешно удалена пользователем {current_user.email}"}
+
 
 @router.patch("/{camera_id}", response_model=dict, status_code=status.HTTP_200_OK)
 async def edit_camera(camera_id: int, camera_data: CameraUpdate, current_user: UserSchema = Depends(check_is_current_user_admin)):
@@ -104,6 +112,7 @@ async def edit_camera(camera_id: int, camera_data: CameraUpdate, current_user: U
     updated_camera = await CameraService.update(id=camera_id, **update_data)
 
     return {"message": f"Камера с ID {camera_id} успешно отредактирована пользователем {current_user.email}"}
+
 
 @router.get("/all", response_model=list[Camera], status_code=status.HTTP_200_OK)
 async def get_all_cameras(current_user: UserSchema = Depends(check_is_current_user_admin)):

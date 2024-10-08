@@ -4,10 +4,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.middleware import RefreshTokenMiddleware
 from app.users.router import router as users_router
 from app.cameras.router import router as cameras_router
+from app.authorization.router import router as authorization_router
 
 
 app = FastAPI()
 
+app.include_router(authorization_router)
 app.include_router(users_router)
 app.include_router(cameras_router)
 
