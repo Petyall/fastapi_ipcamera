@@ -1,8 +1,8 @@
+from sqlalchemy import delete
+
 from app.services import BaseRequests
 from app.database import async_session_maker
 from app.models import Camera, UserCamera, FavoriteCamera
-
-from sqlalchemy import delete
 
 
 class CameraService(BaseRequests):
