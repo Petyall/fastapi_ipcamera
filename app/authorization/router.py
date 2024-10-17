@@ -65,18 +65,18 @@ async def login_user(response: Response, user_data: UserLogin) -> dict:
     access_token = create_access_token({"sub": str(user.id)})
     refresh_token = create_refresh_token({"sub": str(user.id)})
 
-    response.set_cookie(
-        key="access_token",
-        value=access_token,
-        httponly=True
-    )
-    response.set_cookie(
-        key="refresh_token",
-        value=refresh_token,
-        httponly=True
-    )
+    # response.set_cookie(
+    #     key="access_token",
+    #     value=access_token,
+    #     httponly=True
+    # )
+    # response.set_cookie(
+    #     key="refresh_token",
+    #     value=refresh_token,
+    #     httponly=True
+    # )
 
-    return {"message": f"Пользователь {user_data.email} успешно авторизован"}
+    return {"access_token": access_token, "refresh_token": refresh_token}
 
 
 @router.post("/refresh_token", response_model=dict, status_code=status.HTTP_200_OK)
