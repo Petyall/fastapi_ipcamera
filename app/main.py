@@ -1,10 +1,12 @@
-from fastapi import FastAPI
+import time, traceback
+
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-# from app.middleware import RefreshTokenMiddleware
 from app.users.router import router as users_router
 from app.cameras.router import router as cameras_router
 from app.authorization.router import router as authorization_router
+from app.logger import logger
 
 
 app = FastAPI()
@@ -15,8 +17,6 @@ app.include_router(cameras_router)
 
 origins = ["*"]
 
-# app.add_middleware(RefreshTokenMiddleware)
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -24,3 +24,18 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["Content-Type", "Authorization", "Set-Cookie", "Access-Control-Allow-Origin", "Access-Control-Allow-Headers"],
 )
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start_time = time.time()
+    
+    try:
+        logger.info(f"Started request: {request.method} {request.url} from {request.client.host}")
+        response = await call_next(request)
+        process_time = time.time() - start_time
+        logger.info(f"Ended request: {request.method} {request.url} in {round(process_time, 4)} second")
+        return response
+    except Exception as exc:
+        logger.error(f"Request error {request.method} {request.url}: {str(exc)}")
+        logger.error(traceback.format_exc())
+        raise exc
