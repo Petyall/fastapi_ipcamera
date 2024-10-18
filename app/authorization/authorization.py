@@ -35,17 +35,6 @@ def create_access_token(data: dict, expires_delta: timedelta = timedelta(minutes
     return encoded_jwt
 
 
-# def create_refresh_token(data: dict, expires_delta: timedelta = timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)) -> str:
-#     """
-#     Создание JWT refresh токена с указанными данными и временем жизни.
-#     """
-#     to_encode = data.copy()
-#     expire = datetime.utcnow() + expires_delta
-#     to_encode.update({"exp": expire})
-#     encoded_jwt = jwt.encode(to_encode, settings.REFRESH_SECRET_KEY, algorithm=settings.ALGORITHM)
-#     return encoded_jwt
-
-
 async def authenticate_user(email: EmailStr, password: str) -> User | None:
     """
     Аутентификация пользователя по email и паролю.

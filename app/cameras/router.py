@@ -20,14 +20,15 @@ router = APIRouter(
 )
 
 
-@router.post("/", response_model = dict, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=list[Camera], status_code=status.HTTP_201_CREATED)
 async def add_camera(camera_data: CameraCreate, current_user: UserSchema = Depends(check_is_current_user_admin)):
     """
     Добавление камеры (у пользователя должна быть роль администратора и выше)
     """
     await CameraService.add(name=camera_data.name, stream_url=camera_data.stream_url, location=camera_data.location)
+    cameras = await CameraService.find_all()
 
-    return {"message": f"Камера успешно создана"}
+    return cameras
 
 
 @router.get("/all", response_model=list[Camera], status_code=status.HTTP_200_OK)
@@ -74,10 +75,10 @@ async def delete_camera(camera_id: int, current_user: UserSchema = Depends(check
         raise UserCameraNotFoundException
     
     await CameraService.delete(id=camera_id)
-    return {"message": f"Камера с ID {camera_id} успешно удалена пользователем {current_user.email}"}
+    return {"success": True}
 
 
-@router.patch("/{camera_id}", response_model=dict, status_code=status.HTTP_200_OK)
+@router.patch("/{camera_id}", response_model=dict|Camera, status_code=status.HTTP_200_OK)
 async def edit_camera(camera_id: int, camera_data: CameraUpdate, current_user: UserSchema = Depends(check_is_current_user_admin)):
     """
     Редактирование камеры (у пользователя должна быть роль администратора и выше)
@@ -95,7 +96,11 @@ async def edit_camera(camera_id: int, camera_data: CameraUpdate, current_user: U
 
     updated_camera = await CameraService.update(id=camera_id, **update_data)
 
-    return {"message": f"Камера с ID {camera_id} успешно отредактирована пользователем {current_user.email}"}
+    if updated_camera:
+        camera = await CameraService.find_by_id(camera_id)
+        return camera
+    else:
+        return {"success": False}
 
 
 @router.get("/user/all", response_model=list[UserCameraBase], status_code=status.HTTP_200_OK)
@@ -134,7 +139,7 @@ async def add_camera_to_favorite(camera_id: int, current_user: UserSchema = Depe
         raise UserAlreadyHasThisFavoriteCameraException
 
     await UserFavoriteCameraService.add(user_id=current_user.id, camera_id=camera_id)
-    return {"message": f"Пользователь '{current_user.email}' успешно добавил в избранное камеру {camera_id}"}
+    return {"success": True}
 
 
 @router.get("/favorite/all", response_model=list[FavoriteCameraBase], status_code=status.HTTP_200_OK)
@@ -169,4 +174,4 @@ async def delete_camera_from_favorite(camera_id: int, current_user: UserSchema =
         raise UserCameraNotFoundException
 
     await UserFavoriteCameraService.delete(user_id=current_user.id, camera_id=camera_id)
-    return {"message": f"Пользователь '{current_user.email}' успешно удалил из избранного камеру {camera_id}"}
+    return {"success": True}

@@ -44,9 +44,12 @@ class BaseRequests:
     async def add(cls, **data):
         """Добавление объектов"""
         async with async_session_maker() as session:
-            query = insert(cls.model).values(**data)
-            await session.execute(query)
+            query = insert(cls.model).values(**data).returning(cls.model)
+            result = await session.execute(query)
             await session.commit()
+
+            created_object = result.scalars().one_or_none()
+            return created_object
 
     @classmethod
     async def delete(cls, id):
@@ -61,9 +64,12 @@ class BaseRequests:
     async def update(cls, id, **data):
         """Обновление объектов"""
         async with async_session_maker() as session:
-            query = update(cls.model).where(cls.model.id == id).values(**data)
-            await session.execute(query)
+            query = update(cls.model).where(cls.model.id == id).values(**data).returning(cls.model)
+            result = await session.execute(query)
             await session.commit()
+
+            updated_object = result.scalars().one_or_none()
+            return updated_object
 
     @classmethod
     async def select_all_filter(cls, *args, **kwargs):

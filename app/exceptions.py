@@ -28,6 +28,11 @@ class UserIsNotPresentException(ProjectException):
     status_code=status.HTTP_401_UNAUTHORIZED
 
 
+class UserIsBannedException(ProjectException):
+    status_code=status.HTTP_404_NOT_FOUND
+    detail="Пользователь был забанен"
+
+
 class NotEnoughAuthorityException(ProjectException):
     status_code=status.HTTP_409_CONFLICT
     detail="У данного пользователя недостаточно прав"

@@ -1,21 +1,25 @@
-# import jwt
-
 from sqlalchemy.exc import IntegrityError
 from fastapi import APIRouter, Depends, Response, status
+from jose import jwt, JWTError
+from datetime import datetime
 
-# from app.config import settings
 from app.users.services import UserService
+from app.config import settings
 from app.users.schemas import UserCreate, UserLogin, User as UserSchema
-from app.authorization.dependencies import check_is_current_user_root
+from app.authorization.dependencies import check_is_current_user_root, get_token
 from app.authorization.authorization import (
     get_password_hash,
     authenticate_user,
     create_access_token,
 )
 from app.exceptions import (
+    IncorrectFormatTokenException,
+    TokenExpiredException,
     UserAlreadyExistsException,
     IncorrectEmailOrPasswordException,
     UniquePhoneNumberException,
+    UserIsNotPresentException,
+    UserIsBannedException
 )
 
 
@@ -60,47 +64,9 @@ async def login_user(response: Response, user_data: UserLogin) -> dict:
         raise IncorrectEmailOrPasswordException
 
     access_token = create_access_token({"sub": str(user.id)})
-    # refresh_token = create_refresh_token({"sub": str(user.id)})
-
-    # response.set_cookie(
-    #     key="access_token",
-    #     value=access_token,
-    #     httponly=True
-    # )
-    # response.set_cookie(
-    #     key="refresh_token",
-    #     value=refresh_token,
-    #     httponly=True
-    # )
+    response.set_cookie('access_token', access_token, httponly=True)
 
     return {"access_token": access_token}
-
-
-# @router.post("/refresh_token", response_model=dict, status_code=status.HTTP_200_OK)
-# async def refresh_token(response: Response, refresh_token: str = Depends(get_refresh_token)) -> dict:
-#     """
-#     Обновление access токена
-#     """
-#     try:
-#         payload = jwt.decode(refresh_token, settings.REFRESH_SECRET_KEY, algorithms=[settings.ALGORITHM])
-#     except jwt.JWTError:
-#         raise IncorrectFormatTokenException
-
-#     user_id: str = payload.get("sub")
-#     if not user_id:
-#         raise UserIsNotPresentException
-
-#     user = await UserService.find_by_id(user_id)
-#     if not user:
-#         raise UserIsNotPresentException
-
-#     access_token = create_access_token({"sub": str(user.id)})
-#     response.set_cookie(
-#         key="access_token",
-#         value=access_token,
-#         httponly=True
-#     )
-#     return {"message": "Access токен успешно обновлен."}
 
 
 @router.post("/logout", response_model=dict, status_code=status.HTTP_200_OK)
@@ -109,5 +75,31 @@ async def logout_user(response: Response) -> dict:
     Выход пользователя
     """
     response.delete_cookie("access_token")
-    response.delete_cookie("refresh_token")
     return {"message": "До свидания!"}
+
+
+@router.post("/valid_check", status_code=status.HTTP_200_OK)
+async def access_token_valid_check(token = Depends(get_token)):
+    if token:
+        try:
+            payload = jwt.decode(token, settings.SECRET_KEY, settings.ALGORITHM)
+        except JWTError:
+            raise IncorrectFormatTokenException
+
+        expire: str = payload.get("exp")
+        if not expire or datetime.utcnow().timestamp() > expire:
+            raise TokenExpiredException
+
+        user_id: str = payload.get("sub")
+        if not user_id:
+            raise UserIsNotPresentException 
+
+        user = await UserService.find_by_id(user_id)
+        if not user:
+            raise UserIsNotPresentException  
+        
+        if user.ban == True:
+            raise UserIsBannedException
+
+        return user
+    return{"detail": "false"}
