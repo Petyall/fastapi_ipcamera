@@ -1,22 +1,19 @@
-import jwt
+# import jwt
 
 from sqlalchemy.exc import IntegrityError
 from fastapi import APIRouter, Depends, Response, status
 
-from app.config import settings
+# from app.config import settings
 from app.users.services import UserService
 from app.users.schemas import UserCreate, UserLogin, User as UserSchema
-from app.authorization.dependencies import get_refresh_token, check_is_current_user_root
+from app.authorization.dependencies import check_is_current_user_root
 from app.authorization.authorization import (
-    create_refresh_token,
     get_password_hash,
     authenticate_user,
     create_access_token,
 )
 from app.exceptions import (
-    IncorrectFormatTokenException,
     UserAlreadyExistsException,
-    UserIsNotPresentException,
     IncorrectEmailOrPasswordException,
     UniquePhoneNumberException,
 )
@@ -63,7 +60,7 @@ async def login_user(response: Response, user_data: UserLogin) -> dict:
         raise IncorrectEmailOrPasswordException
 
     access_token = create_access_token({"sub": str(user.id)})
-    refresh_token = create_refresh_token({"sub": str(user.id)})
+    # refresh_token = create_refresh_token({"sub": str(user.id)})
 
     # response.set_cookie(
     #     key="access_token",
@@ -76,34 +73,34 @@ async def login_user(response: Response, user_data: UserLogin) -> dict:
     #     httponly=True
     # )
 
-    return {"access_token": access_token, "refresh_token": refresh_token}
+    return {"access_token": access_token}
 
 
-@router.post("/refresh_token", response_model=dict, status_code=status.HTTP_200_OK)
-async def refresh_token(response: Response, refresh_token: str = Depends(get_refresh_token)) -> dict:
-    """
-    Обновление access токена
-    """
-    try:
-        payload = jwt.decode(refresh_token, settings.REFRESH_SECRET_KEY, algorithms=[settings.ALGORITHM])
-    except jwt.JWTError:
-        raise IncorrectFormatTokenException
+# @router.post("/refresh_token", response_model=dict, status_code=status.HTTP_200_OK)
+# async def refresh_token(response: Response, refresh_token: str = Depends(get_refresh_token)) -> dict:
+#     """
+#     Обновление access токена
+#     """
+#     try:
+#         payload = jwt.decode(refresh_token, settings.REFRESH_SECRET_KEY, algorithms=[settings.ALGORITHM])
+#     except jwt.JWTError:
+#         raise IncorrectFormatTokenException
 
-    user_id: str = payload.get("sub")
-    if not user_id:
-        raise UserIsNotPresentException
+#     user_id: str = payload.get("sub")
+#     if not user_id:
+#         raise UserIsNotPresentException
 
-    user = await UserService.find_by_id(user_id)
-    if not user:
-        raise UserIsNotPresentException
+#     user = await UserService.find_by_id(user_id)
+#     if not user:
+#         raise UserIsNotPresentException
 
-    access_token = create_access_token({"sub": str(user.id)})
-    response.set_cookie(
-        key="access_token",
-        value=access_token,
-        httponly=True
-    )
-    return {"message": "Access токен успешно обновлен."}
+#     access_token = create_access_token({"sub": str(user.id)})
+#     response.set_cookie(
+#         key="access_token",
+#         value=access_token,
+#         httponly=True
+#     )
+#     return {"message": "Access токен успешно обновлен."}
 
 
 @router.post("/logout", response_model=dict, status_code=status.HTTP_200_OK)

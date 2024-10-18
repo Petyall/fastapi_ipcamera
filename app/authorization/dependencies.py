@@ -18,20 +18,21 @@ async def get_token(request: Request) -> str:
     """
     Получение токена из cookie запроса.
     """
-    token = request.cookies.get("access_token")
+    # token = request.cookies.get("access_token")
+    token = request.headers.get("authorization")
     if not token:
         raise TokenAbsentException
     return token
 
 
-async def get_refresh_token(request: Request) -> str:
-    """
-    Получение рефреш-токена из cookie запроса.
-    """
-    token = request.cookies.get("refresh_token")
-    if not token:
-        raise TokenAbsentException
-    return token
+# async def get_refresh_token(request: Request) -> str:
+#     """
+#     Получение рефреш-токена из cookie запроса.
+#     """
+#     token = request.cookies.get("refresh_token")
+#     if not token:
+#         raise TokenAbsentException
+#     return token
 
 
 async def get_uuid(email: str) -> str:
