@@ -5,7 +5,8 @@ from fastapi import APIRouter, Depends, status
 from app.users.schemas import User as UserSchema
 from app.authorization.dependencies import get_current_user, check_is_current_user_admin
 from app.cameras.services import CameraService, UserCameraService, UserFavoriteCameraService
-from app.cameras.schemas import UserCameraBase, FavoriteCameraBase, CameraCreate, CameraUpdate, Camera
+from app.cameras.schemas import CameraCreate, CameraUpdate, Camera
+from app.cameras.responses import CamerasResponse, CameraResponse, UserCamerasResponse
 from app.exceptions import (
     UserCamerasNotFoundException, 
     UserCameraNotFoundException, 
@@ -20,7 +21,7 @@ router = APIRouter(
 )
 
 
-@router.post("/", response_model=list[Camera], status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=CamerasResponse, status_code=status.HTTP_201_CREATED)
 async def add_camera(camera_data: CameraCreate, current_user: UserSchema = Depends(check_is_current_user_admin)):
     """
     Добавление камеры (у пользователя должна быть роль администратора и выше)
@@ -28,20 +29,20 @@ async def add_camera(camera_data: CameraCreate, current_user: UserSchema = Depen
     await CameraService.add(name=camera_data.name, stream_url=camera_data.stream_url, location=camera_data.location)
     cameras = await CameraService.find_all()
 
-    return cameras
+    return {"cameras": cameras}
 
 
-@router.get("/all", response_model=list[Camera], status_code=status.HTTP_200_OK)
+@router.get("/all", response_model=CamerasResponse, status_code=status.HTTP_200_OK)
 async def get_all_cameras(current_user: UserSchema = Depends(check_is_current_user_admin)):
     """
     Получение всех камер (у пользователя должна быть роль администратора и выше)
     """
     cameras = await CameraService.find_all()
 
-    return cameras
+    return {"cameras": cameras}
 
 
-@router.get("/{camera_id}", response_model=Camera, status_code=status.HTTP_200_OK)
+@router.get("/{camera_id}", response_model=CameraResponse, status_code=status.HTTP_200_OK)
 async def get_camera_by_id(camera_id: int, current_user: UserSchema = Depends(check_is_current_user_admin)):
     """
     Получение камеры по её ID (у пользователя должна быть роль администратора и выше)
@@ -50,10 +51,10 @@ async def get_camera_by_id(camera_id: int, current_user: UserSchema = Depends(ch
     if not camera:
         raise UserCameraNotFoundException
     
-    return camera
+    return {"camera": camera}
 
 
-@router.get("/users/{user_id}", response_model=list[UserCameraBase], status_code=status.HTTP_200_OK)
+@router.get("/users/{user_id}", response_model=UserCamerasResponse, status_code=status.HTTP_200_OK)
 async def get_cameras_by_user(user_id: UUID, current_user: UserSchema = Depends(check_is_current_user_admin)):  
     """
     Получение камер, закрепленных за пользователем (должна быть роль администратора и выше)
@@ -62,7 +63,7 @@ async def get_cameras_by_user(user_id: UUID, current_user: UserSchema = Depends(
     if not cameras:
         raise UserCamerasNotFoundException
     
-    return cameras
+    return {"cameras": cameras}
 
 
 @router.delete("/{camera_id}", response_model=dict, status_code=status.HTTP_200_OK)
@@ -90,7 +91,7 @@ async def edit_camera(camera_id: int, camera_data: CameraUpdate, current_user: U
     update_data = {k: v for k, v in camera_data.dict(exclude_unset=True).items() if v != ""}
     
     if not update_data:
-        return {"message": "Нет данных для обновления"}
+        return {"detail": "Нет данных для обновления"}
     
     update_data['updated_at'] = datetime.utcnow()
 
@@ -103,26 +104,33 @@ async def edit_camera(camera_id: int, camera_data: CameraUpdate, current_user: U
         return {"success": False}
 
 
-@router.get("/user/all", response_model=list[UserCameraBase], status_code=status.HTTP_200_OK)
+@router.get("/user/all", response_model=CamerasResponse, status_code=status.HTTP_200_OK)
 async def get_all_user_cameras(current_user: UserSchema = Depends(get_current_user)):
     """
     Все камеры, закрепленные за пользователем
     """
-    cameras = await UserCameraService.find_all(user_id=current_user.id)
-    if not cameras:
+    user_cameras = await UserCameraService.find_all(user_id=current_user.id)
+    if not user_cameras:
         raise UserCamerasNotFoundException
-    return cameras
+
+    cameras = []
+    for camera in user_cameras:
+        cameras.append(await CameraService.find_by_id(int(camera.camera_id)))
+        
+    return {"cameras": cameras}
 
 
-@router.get("/user/{camera_id}", response_model=UserCameraBase, status_code=status.HTTP_200_OK)
+@router.get("/user/{camera_id}", response_model=CameraResponse, status_code=status.HTTP_200_OK)
 async def get_user_camera_by_id(camera_id: int, current_user: UserSchema = Depends(get_current_user)):
     """
     Получение камеры, закрепленной за пользователем по её ID
     """
-    camera = await UserCameraService.find_one_or_none(user_id=current_user.id, camera_id=camera_id)
-    if not camera:
+    user_camera = await UserCameraService.find_one_or_none(user_id=current_user.id, camera_id=camera_id)
+    if not user_camera:
         raise UserCameraNotFoundException
-    return camera
+    
+    camera = await CameraService.find_one_or_none(id=user_camera.camera_id)
+    return {"camera": camera}
 
 
 @router.post("/favorite", response_model= dict, status_code=status.HTTP_201_CREATED)
@@ -142,29 +150,37 @@ async def add_camera_to_favorite(camera_id: int, current_user: UserSchema = Depe
     return {"success": True}
 
 
-@router.get("/favorite/all", response_model=list[FavoriteCameraBase], status_code=status.HTTP_200_OK)
+@router.get("/favorite/all", response_model=CamerasResponse, status_code=status.HTTP_200_OK)
 async def get_all_favorite_user_cameras(current_user: UserSchema = Depends(get_current_user)):
     """
     Все избранные камеры пользователя (выводятся только те, которые закреплены за пользователем и были добавлены им в избранное)
     """
-    cameras = await UserFavoriteCameraService.find_all(user_id=current_user.id)
-    if not cameras:
+    user_favorite_cameras = await UserFavoriteCameraService.find_all(user_id=current_user.id)
+    if not user_favorite_cameras:
         raise UserFavoriteCamerasNotFoundException
-    return cameras
+    
+    cameras = []
+    for camera in user_favorite_cameras:
+        cameras.append(await CameraService.find_by_id(int(camera.camera_id)))
+
+    return {"cameras": cameras}
 
 
-@router.get("/favorite/{camera_id}", response_model=FavoriteCameraBase, status_code=status.HTTP_200_OK)
+@router.get("/favorite/{camera_id}", response_model=CameraResponse, status_code=status.HTTP_200_OK)
 async def get_favorite_user_camera_by_id(camera_id: int, current_user: UserSchema = Depends(get_current_user)):
     """
     Получение избранной камеры пользователя по её ID (если пользователь введёт камеру, которая не закреплена за ним, то ничего не выведется в ответ)
     """
-    camera = await UserFavoriteCameraService.find_one_or_none(user_id=current_user.id, camera_id=camera_id)
-    if not camera:
+    user_favorite_camera = await UserFavoriteCameraService.find_one_or_none(user_id=current_user.id, camera_id=camera_id)
+    if not user_favorite_camera:
         raise UserCameraNotFoundException
-    return camera
+    
+    camera = await CameraService.find_one_or_none(id=user_favorite_camera.camera_id)
+
+    return {"camera": camera}
 
 
-@router.delete("/favorite", response_model= dict, status_code=status.HTTP_200_OK)
+@router.post("/favorite/delete", response_model= dict, status_code=status.HTTP_200_OK)
 async def delete_camera_from_favorite(camera_id: int, current_user: UserSchema = Depends(get_current_user)) -> dict:
     """
     Удаление пользователем камеры из избранного

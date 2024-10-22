@@ -36,3 +36,15 @@ class User(UserBase):
 
     class Config:
         orm_mode = True
+
+
+class UserPublic(BaseModel):
+    email: EmailStr
+    first_name: str
+    last_name: str
+    paternal_name: str
+    phone_number: str
+
+    class Config:
+        orm_mode = True
+        

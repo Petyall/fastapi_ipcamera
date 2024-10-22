@@ -1,7 +1,7 @@
 from uuid import UUID
-from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
+from pydantic import BaseModel
 
 
 class CameraBase(BaseModel):
@@ -42,12 +42,19 @@ class UserCamera(UserCameraBase):
 
 
 class FavoriteCameraBase(BaseModel):
-    user_id: UUID
     camera_id: int
 
     class Config:
         orm_mode = True
 
 
-class FavoriteCamera(FavoriteCameraBase):
+class FavoriteCameraAdd(FavoriteCameraBase):
     pass
+
+
+class FavoriteCameraDelete(FavoriteCameraBase):
+    pass
+
+
+class FavoriteCamera(FavoriteCameraBase):
+    user_id: UUID
