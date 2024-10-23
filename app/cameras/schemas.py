@@ -4,20 +4,16 @@ from datetime import datetime
 from pydantic import BaseModel
 
 
-class CameraBase(BaseModel):
+class CameraCreate(BaseModel):
     name: str
     stream_url: str
     location: str
 
 
-class CameraCreate(CameraBase):
-    pass
-
-
-class Camera(CameraBase):
+class CameraPublic(BaseModel):
     id: int
-    created_at: datetime
-    updated_at: datetime
+    name: str
+    location: str
 
     class Config:
         orm_mode = True
@@ -25,8 +21,11 @@ class Camera(CameraBase):
 
 class CameraUpdate(BaseModel):
     name: Optional[str] = None
-    location: Optional[str] = None
     stream_url: Optional[str] = None
+    location: Optional[str] = None
+
+    class Config:
+        orm_mode = True
 
 
 class UserCameraBase(BaseModel):
@@ -37,24 +36,8 @@ class UserCameraBase(BaseModel):
         orm_mode = True
 
 
-class UserCamera(UserCameraBase):
-    pass
-
-
 class FavoriteCameraBase(BaseModel):
     camera_id: int
 
     class Config:
         orm_mode = True
-
-
-class FavoriteCameraAdd(FavoriteCameraBase):
-    pass
-
-
-class FavoriteCameraDelete(FavoriteCameraBase):
-    pass
-
-
-class FavoriteCamera(FavoriteCameraBase):
-    user_id: UUID

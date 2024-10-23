@@ -12,6 +12,15 @@ class CameraService(BaseRequests):
 class UserCameraService(BaseRequests):
     model = UserCamera
 
+    @classmethod
+    async def delete(cls, user_id, camera_id):
+        """Удаление объектов"""
+        async with async_session_maker() as session:
+            async with session.begin():
+                query = delete(cls.model).where(cls.model.user_id == user_id, cls.model.camera_id == camera_id)
+                await session.execute(query)
+                await session.commit()
+
 
 class UserFavoriteCameraService(BaseRequests):
     model = FavoriteCamera

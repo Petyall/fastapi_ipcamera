@@ -4,14 +4,18 @@ from fastapi import APIRouter, Depends, status
 
 from app.users.schemas import User as UserSchema
 from app.authorization.dependencies import get_current_user, check_is_current_user_admin
+from app.users.services import UserService
 from app.cameras.services import CameraService, UserCameraService, UserFavoriteCameraService
-from app.cameras.schemas import CameraCreate, CameraUpdate, Camera
+from app.cameras.schemas import CameraCreate, CameraUpdate, CameraPublic, UserCameraBase
+from app.stream.url_encryption import encrypt_stream_url
 from app.cameras.responses import CamerasResponse, CameraResponse, UserCamerasResponse
 from app.exceptions import (
+    UserAlreadyHasAccessToThisCameraException,
     UserCamerasNotFoundException, 
     UserCameraNotFoundException, 
     UserFavoriteCamerasNotFoundException, 
-    UserAlreadyHasThisFavoriteCameraException
+    UserAlreadyHasThisFavoriteCameraException,
+    UserNotFoundException
     )
 
 
@@ -26,7 +30,9 @@ async def add_camera(camera_data: CameraCreate, current_user: UserSchema = Depen
     """
     Добавление камеры (у пользователя должна быть роль администратора и выше)
     """
-    await CameraService.add(name=camera_data.name, stream_url=camera_data.stream_url, location=camera_data.location)
+    encrypted_stream_url = encrypt_stream_url(camera_data.stream_url)
+    
+    await CameraService.add(name=camera_data.name, stream_url=encrypted_stream_url, location=camera_data.location)
     cameras = await CameraService.find_all()
 
     return {"cameras": cameras}
@@ -79,7 +85,7 @@ async def delete_camera(camera_id: int, current_user: UserSchema = Depends(check
     return {"success": True}
 
 
-@router.patch("/{camera_id}", response_model=dict|Camera, status_code=status.HTTP_200_OK)
+@router.patch("/{camera_id}", response_model=dict|CameraPublic, status_code=status.HTTP_200_OK)
 async def edit_camera(camera_id: int, camera_data: CameraUpdate, current_user: UserSchema = Depends(check_is_current_user_admin)):
     """
     Редактирование камеры (у пользователя должна быть роль администратора и выше)
@@ -95,6 +101,9 @@ async def edit_camera(camera_id: int, camera_data: CameraUpdate, current_user: U
     
     update_data['updated_at'] = datetime.utcnow()
 
+    if update_data['stream_url']:
+        update_data['stream_url'] = encrypt_stream_url(update_data['stream_url'])
+
     updated_camera = await CameraService.update(id=camera_id, **update_data)
 
     if updated_camera:
@@ -102,6 +111,40 @@ async def edit_camera(camera_id: int, camera_data: CameraUpdate, current_user: U
         return camera
     else:
         return {"success": False}
+
+
+@router.post("/user/add_camera", response_model=dict, status_code=status.HTTP_201_CREATED)
+async def add_camera_to_user(camera_data: UserCameraBase, current_user: UserSchema = Depends(check_is_current_user_admin)):
+    """
+    Открытие доступа к камере пользователю
+    """
+    user_camera = await UserCameraService.find_one_or_none(camera_id=camera_data.camera_id, user_id=camera_data.user_id)
+    if user_camera:
+        raise UserAlreadyHasAccessToThisCameraException
+
+    user = await UserService.find_one_or_none(id=camera_data.user_id)
+    if not user:
+        raise UserNotFoundException
+    
+    camera = await CameraService.find_one_or_none(id=camera_data.camera_id)
+    if not camera:
+        raise UserCameraNotFoundException
+    
+    await UserCameraService.add(camera_id=camera_data.camera_id, user_id=camera_data.user_id)
+    return {"success": True}
+
+
+@router.post("/user/delete_camera", response_model=dict, status_code=status.HTTP_201_CREATED)
+async def delete_camera_from_user(camera_data: UserCameraBase, current_user: UserSchema = Depends(check_is_current_user_admin)):
+    """
+    Открытие доступа к камере пользователю
+    """
+    user_camera = await UserCameraService.find_one_or_none(camera_id=camera_data.camera_id, user_id=camera_data.user_id)
+    if not user_camera:
+        raise UserCameraNotFoundException
+    
+    await UserCameraService.delete(camera_id=camera_data.camera_id, user_id=camera_data.user_id)
+    return {"success": True}
 
 
 @router.get("/user/all", response_model=CamerasResponse, status_code=status.HTTP_200_OK)

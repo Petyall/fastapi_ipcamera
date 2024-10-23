@@ -63,6 +63,16 @@ class UserCamerasNotFoundException(ProjectException):
     detail="У данного пользователя не найдены камеры"
 
 
+class UserAlreadyHasAccessToThisCameraException(ProjectException):
+    status_code=status.HTTP_409_CONFLICT
+    detail="У данного пользователя уже есть доступ к этой камере"
+
+
+class CameraNotFoundException(ProjectException):
+    status_code=status.HTTP_404_NOT_FOUND
+    detail="Камера с таким ID не найдена либо доступ к ней запрещен"
+
+
 class UserCameraNotFoundException(ProjectException):
     status_code=status.HTTP_404_NOT_FOUND
     detail="Камера с таким ID не найдена"

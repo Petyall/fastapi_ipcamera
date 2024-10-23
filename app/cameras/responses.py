@@ -1,15 +1,15 @@
 from typing import List
 from pydantic import BaseModel
 
-from app.cameras.schemas import Camera, UserCameraBase, FavoriteCameraBase
+from app.cameras.schemas import CameraPublic, UserCameraBase, FavoriteCameraBase
 
 
 class CameraResponse(BaseModel):
-    camera: Camera
+    camera: CameraPublic
 
 
 class CamerasResponse(BaseModel):
-    cameras: List[Camera]
+    cameras: List[CameraPublic]
 
 
 class UserCamerasResponse(BaseModel):
