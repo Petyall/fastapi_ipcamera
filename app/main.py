@@ -7,6 +7,7 @@ from app.users.router import router as users_router
 from app.stream.router import router as stream_router
 from app.cameras.router import router as cameras_router
 from app.authorization.router import router as authorization_router
+from app.importer.router import router as importer_router
 from app.logger import logger
 
 
@@ -16,6 +17,7 @@ app.include_router(authorization_router)
 app.include_router(users_router)
 app.include_router(cameras_router)
 app.include_router(stream_router)
+app.include_router(importer_router)
 
 origins = ["*"]
 

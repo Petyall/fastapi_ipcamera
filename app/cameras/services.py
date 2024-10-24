@@ -8,6 +8,14 @@ from app.models import Camera, UserCamera, FavoriteCamera
 class CameraService(BaseRequests):
     model = Camera
 
+    @classmethod
+    async def import_cameras(cls, objects):
+        """Добавление камер из списка"""
+        async with async_session_maker() as session:
+            async with session.begin():
+                session.add_all(objects)
+            await session.commit()
+
 
 class UserCameraService(BaseRequests):
     model = UserCamera

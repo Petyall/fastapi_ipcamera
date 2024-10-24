@@ -4,8 +4,10 @@ from fastapi import HTTPException, status
 class ProjectException(HTTPException):
     status_code = 500
     detail = ""
-    
-    def __init__(self):
+
+    def __init__(self, detail: str = None):
+        if detail:
+            self.detail = detail
         super().__init__(status_code=self.status_code, detail=self.detail)
 
 
@@ -101,3 +103,21 @@ class UnexpectedErrorException(ProjectException):
 class IncorrectUserUpdateDataException(ProjectException):
     status_code=status.HTTP_409_CONFLICT
     detail="Введенные данные не соответствуют необходимому формату"
+
+
+class IncorrectFileTypeException(ProjectException):
+    status_code=status.HTTP_409_CONFLICT
+    detail="Неверный формат файла"
+
+
+class IncorrectFileDataException(ProjectException):
+    status_code=status.HTTP_409_CONFLICT
+    detail="Некорректный формат данных в файле"
+
+
+class ImportDataException(ProjectException):
+    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+    def __init__(self, error_message: str):
+        super().__init__(detail=f"Ошибка при импорте данных: {error_message}")
+
+        
