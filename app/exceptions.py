@@ -58,6 +58,11 @@ class IncorrectEmailOrPasswordException(ProjectException):
     detail="Неверная почта или пароль"
 
 
+class CameraHasForeignKeysException(ProjectException):
+    status_code=status.HTTP_400_BAD_REQUEST
+    detail="Камера имеет связи с другими таблицами. Подтвердите удаление всех зависимых записей, установив параметр 'confirm=true'."
+
+
 class UserCamerasNotFoundException(ProjectException):
     status_code=status.HTTP_404_NOT_FOUND
     detail="У данного пользователя не найдены камеры"

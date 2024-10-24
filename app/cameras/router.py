@@ -15,7 +15,8 @@ from app.exceptions import (
     UserCameraNotFoundException, 
     UserFavoriteCamerasNotFoundException, 
     UserAlreadyHasThisFavoriteCameraException,
-    UserNotFoundException
+    UserNotFoundException,
+    CameraHasForeignKeysException
     )
 
 
@@ -73,15 +74,27 @@ async def get_cameras_by_user(user_id: UUID, current_user: UserSchema = Depends(
 
 
 @router.delete("/{camera_id}", response_model=dict, status_code=status.HTTP_200_OK)
-async def delete_camera(camera_id: int, current_user: UserSchema = Depends(check_is_current_user_admin)) -> dict:
+async def delete_camera(camera_id: int, confirm: bool = False, current_user: UserSchema = Depends(check_is_current_user_admin)) -> dict:
     """
-    Удаление камеры (у пользователя должна быть роль администратора и выше)
+    Удаление камеры (у пользователя должна быть роль администратора и выше).
+    Если камера связана с другими записями, будет предложено подтверждение на удаление всех связанных записей.
     """
     camera = await CameraService.find_one_or_none(id=camera_id)
     if not camera:
         raise UserCameraNotFoundException
-    
+
+    user_cameras = await UserCameraService.find_all(camera_id=camera_id)
+    favorite_cameras = await UserFavoriteCameraService.find_all(camera_id=camera_id)
+
+    if user_cameras or favorite_cameras:
+        if not confirm:
+            raise CameraHasForeignKeysException
+        
+        await UserCameraService.delete_all(camera_id=camera_id)
+        await UserFavoriteCameraService.delete_all(camera_id=camera_id)
+
     await CameraService.delete(id=camera_id)
+
     return {"success": True}
 
 
