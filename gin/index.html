@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Camera Streams</title>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+</head>
+<body>
+    <div>
+        <label for="cameraSelect">Выберите камеру:</label>
+        <select id="cameraSelect">
+            <option value="192.168.0.100">Камера 1</option>
+            <option value="192.168.0.101">Камера 1</option>
+            <option value="192.168.0.102">Камера 1</option>
+            <option value="192.168.0.103">Камера 1</option>
+            <option value="192.168.0.104">Камера 1</option>
+        </select>
+        <button onclick="startStream()">Запустить поток</button>
+        <button onclick="stopStream()">Остановить поток</button>
+    </div>
+    <video id="videoPlayer" width="640" height="360" controls></video>
+
+    <script>
+        let currentCamera = null;
+
+        async function startStream() {
+            const cameraIP = document.getElementById('cameraSelect').value;
+            if (currentCamera) await stopStream();
+
+            fetch(`/start/${cameraIP}`, {method: 'POST'})
+                .then(() => {
+                    const video = document.getElementById('videoPlayer');
+                    const hls = new Hls();
+                    const streamUrl = `/streams/camera_${cameraIP}/index.m3u8`;
+
+                    if (Hls.isSupported()) {
+                        hls.loadSource(streamUrl);
+                        hls.attachMedia(video);
+                    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                        video.src = streamUrl;
+                    }
+                    currentCamera = cameraIP;
+                })
+                .catch(console.error);
+        }
+
+        async function stopStream() {
+            if (!currentCamera) return;
+            await fetch(`/stop/${currentCamera}`, {method: 'POST'});
+            currentCamera = null;
+        }
+
+        window.addEventListener('beforeunload', stopStream);
+    </script>
+</body>
+</html>
