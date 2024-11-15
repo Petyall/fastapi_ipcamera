@@ -18,8 +18,9 @@ async def get_token(request: Request) -> str:
     """
     Получение токена из cookie запроса.
     """
-    # token = request.cookies.get("access_token")
-    token = request.headers.get("authorization")
+    token = request.cookies.get("access_token")
+    if not token:
+        token = request.headers.get("authorization")
     if not token:
         raise TokenAbsentException
     return token

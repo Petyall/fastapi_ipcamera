@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Camera Streams</title>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+</head>
+<body>
+    <div>
+        <button onclick="stopStream()">Остановить поток</button>
+    </div>
+    <video id="videoPlayer" width="1024" height="768" controls autoplay></video>
+
+    <script>
+        let currentCamera = null;
+
+        async function startStream(cameraID) {
+            if (currentCamera) await stopStream();
+
+            fetch(`/start/${cameraID}`, {method: 'POST'})
+                .then(() => {
+                    const video = document.getElementById('videoPlayer');
+                    const hls = new Hls();
+                    const streamUrl = `/streams/camera_${cameraID}/index.m3u8`;
+
+                    if (Hls.isSupported()) {
+                        hls.loadSource(streamUrl);
+                        hls.attachMedia(video);
+                    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                        video.src = streamUrl;
+                    }
+                    currentCamera = cameraID;
+                })
+                .catch(console.error);
+        }
+
+        async function stopStream() {
+            if (!currentCamera) return;
+            await fetch(`/stream/stop/${currentCamera}`, {method: 'GET'});
+            currentCamera = null;
+        }
+
+        // Извлечение ID камеры из URL
+        function getCameraIDFromURL() {
+            const urlParts = window.location.pathname.split('/');
+            return urlParts[urlParts.length - 1];
+        }
+
+        // Запуск при загрузке страницы
+        window.addEventListener('load', () => {
+            const cameraID = getCameraIDFromURL();
+            if (cameraID) {
+                startStream(cameraID);
+            } else {
+                console.error('ID камеры не найден в URL');
+            }
+        });
+
+        // window.addEventListener('beforeunload', stopStream);
+        window.onbeforeunload = stopStream;
+    </script>
+</body>
+</html>

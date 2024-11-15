@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES:int
     REFRESH_TOKEN_EXPIRE_DAYS:int
     ENCRYPTION_KEY:str
+    GIN_HOST:str
+    STREAMS_DIR:str
     
     class Config:
         env_file = '.env'
