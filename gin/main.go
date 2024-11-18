@@ -21,43 +21,60 @@ import (
 )
 
 type streamInfo struct {
-	process   *exec.Cmd
-	viewCount int
-	mux       sync.Mutex
+	process *exec.Cmd
+	viewers map[string]bool // Уникальные ID зрителей
+	mux     sync.Mutex      // Защита данных о процессе и зрителях
 }
 
 var Database *gorm.DB
 
 var (
-	streams = make(map[string]*streamInfo)
-	mux     sync.RWMutex
+	streams       = make(map[string]*streamInfo)
+	mux           sync.RWMutex
+	activeViewers = make(map[string]int) // viewerID -> cameraID
 )
 
-func startFFMPEG(cameraID int, streamURL string) error {
-	mux.RLock()
-	info, exists := streams[strconv.Itoa(cameraID)]
-	mux.RUnlock()
+func startFFMPEG(cameraID int, streamURL, viewerID string) error {
+	mux.Lock()
 
+	// Проверяем, смотрит ли пользователь другой поток
+	if oldCameraID, watching := activeViewers[viewerID]; watching && oldCameraID != cameraID {
+		fmt.Printf("Зритель %s уже смотрит поток камеры %d, отключаем...\n", viewerID, oldCameraID)
+		mux.Unlock() // Освобождаем мьютекс для вызова stopFFMPEG
+		if err := stopFFMPEG(oldCameraID, viewerID); err != nil {
+			return fmt.Errorf("не удалось отключить зрителя %s от камеры %d: %v", viewerID, oldCameraID, err)
+		}
+		mux.Lock() // Возвращаем блокировку для продолжения
+	}
+
+	info, exists := streams[strconv.Itoa(cameraID)]
 	if exists {
 		info.mux.Lock()
 		defer info.mux.Unlock()
 
 		// Проверяем, запущен ли процесс
 		if info.process != nil && info.process.ProcessState == nil {
-			info.viewCount++
-			fmt.Printf("К просмотру RTSP потока %d присоединился новый человек\n", cameraID)
+			if _, alreadyViewing := info.viewers[viewerID]; !alreadyViewing {
+				info.viewers[viewerID] = true
+				fmt.Printf("Зритель %s присоединился к просмотру RTSP потока %d\n", viewerID, cameraID)
+				activeViewers[viewerID] = cameraID
+			} else {
+				fmt.Printf("Зритель %s уже подключен к RTSP потоку %d\n", viewerID, cameraID)
+			}
+			mux.Unlock()
 			return nil
 		}
 
 		// Процесс завершился или неактивен
 		fmt.Printf("Перезапуск трансляции RTSP потока камеры %d\n", cameraID)
-		info.viewCount = 0
+		info.viewers = make(map[string]bool) // Очистка списка зрителей
 	}
 
 	fmt.Printf("Начало трансляции RTSP потока камеры %d\n", cameraID)
 
 	dirPath := filepath.Join("streams", "camera_"+strconv.Itoa(cameraID))
 	if err := os.MkdirAll(dirPath, os.ModePerm); err != nil {
+		mux.Unlock()
 		return err
 	}
 
@@ -67,20 +84,22 @@ func startFFMPEG(cameraID int, streamURL string) error {
 		"./streams/camera_"+strconv.Itoa(cameraID)+"/index.m3u8")
 
 	if err := cmd.Start(); err != nil {
+		mux.Unlock()
 		return err
 	}
 
-	mux.Lock()
-	defer mux.Unlock()
 	if !exists {
 		streams[strconv.Itoa(cameraID)] = &streamInfo{
-			process:   cmd,
-			viewCount: 1,
+			process: cmd,
+			viewers: map[string]bool{viewerID: true},
 		}
 	} else {
 		info.process = cmd
-		info.viewCount = 1
+		info.viewers = map[string]bool{viewerID: true}
 	}
+
+	activeViewers[viewerID] = cameraID
+	mux.Unlock()
 
 	filePath := "./streams/camera_" + strconv.Itoa(cameraID) + "/index.m3u8"
 	for i := 0; i < 30; i++ {
@@ -97,32 +116,42 @@ func startFFMPEG(cameraID int, streamURL string) error {
 	return nil
 }
 
-func stopFFMPEG(cameraID int) error {
+func stopFFMPEG(cameraID int, viewerID string) error {
 	mux.Lock()
 	defer mux.Unlock()
 
 	info, exists := streams[strconv.Itoa(cameraID)]
-	if !exists || info.viewCount <= 0 {
-		return fmt.Errorf("в данный момент никто не просматривает камеру %d", cameraID)
+	if !exists {
+		return fmt.Errorf("камера %d не активна", cameraID)
 	}
 
 	info.mux.Lock()
-	info.viewCount--
-	info.mux.Unlock()
+	defer info.mux.Unlock()
 
-	if info.viewCount == 0 {
-		fmt.Printf("Остановка трансляции RTSP потока для камеры %d\n", cameraID)
+	// Удаляем зрителя
+	if _, viewerExists := info.viewers[viewerID]; viewerExists {
+		delete(info.viewers, viewerID)
+		delete(activeViewers, viewerID)
+		fmt.Printf("Зритель %s отключился от камеры %d\n", viewerID, cameraID)
+	} else {
+		return fmt.Errorf("зритель %s не найден в списке для камеры %d", viewerID, cameraID)
+	}
+
+	// Проверяем количество оставшихся зрителей
+	if len(info.viewers) == 0 {
+		fmt.Printf("Остановка трансляции RTSP потока для камеры %d (нет зрителей)\n", cameraID)
 		if err := info.process.Process.Kill(); err != nil {
 			return err
 		}
 		delete(streams, strconv.Itoa(cameraID))
 
+		// Удаляем временные файлы трансляции
 		err := os.RemoveAll(filepath.Join("streams", "camera_"+strconv.Itoa(cameraID)))
 		if err != nil {
 			return err
 		}
 	} else {
-		fmt.Printf("Уменьшено количество просматривающих трансляцию RTSP потока для камеры %d до %d\n", cameraID, info.viewCount)
+		fmt.Printf("Количество зрителей камеры %d уменьшено до %d\n", cameraID, len(info.viewers))
 	}
 
 	return nil
@@ -193,7 +222,6 @@ func main() {
 
 	r := gin.Default()
 
-	// r.Use(AllowOnlyLocalhost)
 	r.StaticFile("/", "./index.html")
 	r.StaticFS("/streams", http.Dir("./streams"))
 
@@ -233,21 +261,23 @@ func main() {
 		if err != nil {
 			log.Fatalf("Ошибка при дешифровании ссылки на rtsp поток %v", err)
 		}
-		if err := startFFMPEG(camera.ID, stream_url); err != nil {
+		if err := startFFMPEG(camera.ID, stream_url, userID.(string)); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"message": "Запущена трансляция RTSP потока камеры " + camera.Location})
 	})
 
-	r.POST("/stop/:cameraID", func(c *gin.Context) {
+	r.POST("/stop/:cameraID", AuthMiddleware(), func(c *gin.Context) {
+		userID, _ := c.Get("user_id")
+		fmt.Println("?????????", userID)
 		cameraIDStr := c.Param("cameraID")
 		cameraID, err := strconv.Atoi(cameraIDStr)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Неверный ID камеры"})
 			return
 		}
-		if err := stopFFMPEG(cameraID); err != nil {
+		if err := stopFFMPEG(cameraID, userID.(string)); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}

@@ -47,7 +47,7 @@ async def stream_camera(request: Request, camera_id: int, current_user: UserSche
 
 
 @router.get("/stop/{camera_id}", status_code=status.HTTP_200_OK)
-async def stream_camera_stop(request: Request, camera_id: int, current_user: UserSchema = Depends(get_current_user)):
+async def stream_camera_stop(request: Request, camera_id: int, current_user: UserSchema = Depends(get_current_user), token: str = Depends(get_token)):
     user_camera = await UserCameraService.find_one_or_none(user_id=current_user.id, camera_id=camera_id)
     if not user_camera:
         raise UserCameraNotFoundException
@@ -58,7 +58,10 @@ async def stream_camera_stop(request: Request, camera_id: int, current_user: Use
 
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(15.0)) as client:
-            response = await client.post(f"{GIN_HOST}/stop/{camera_id}")
+            response = await client.post(
+                f"{GIN_HOST}/stop/{camera_id}",
+                headers={"Authorization": f"Bearer {token}"}
+            )
             response.raise_for_status()
     except httpx.HTTPStatusError as e:
         print(HTTPException(status_code=e.response.status_code, detail="Не удалось остановить поток"))
