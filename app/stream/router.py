@@ -2,7 +2,7 @@ import httpx
 
 from app.config import settings
 from app.users.schemas import User as UserSchema
-from app.authorization.dependencies import get_current_user
+from app.authorization.dependencies import get_current_user, get_token
 from app.cameras.services import CameraService, UserCameraService
 from app.exceptions import CameraNotFoundException, UserCameraNotFoundException
 
@@ -20,7 +20,7 @@ GIN_HOST = settings.GIN_HOST
 
 
 @router.get("/start/{camera_id}", status_code=status.HTTP_200_OK)
-async def stream_camera(request: Request, camera_id: int, current_user: UserSchema = Depends(get_current_user)):
+async def stream_camera(request: Request, camera_id: int, current_user: UserSchema = Depends(get_current_user), token: str = Depends(get_token)):
     """
     Потоковое воспроизведение камеры, к которой у пользователя есть доступ
     """
@@ -31,10 +31,14 @@ async def stream_camera(request: Request, camera_id: int, current_user: UserSche
     camera = await CameraService.find_one_or_none(id=camera_id)
     if not camera:
         raise CameraNotFoundException
+    print(f"Отправляемый токен: Bearer {token}")
 
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(15.0)) as client:
-            response = await client.post(f"{GIN_HOST}/start/{camera_id}")
+            response = await client.post(
+                f"{GIN_HOST}/start/{camera_id}",
+                headers={"Authorization": f"Bearer {token}"}
+            )
             response.raise_for_status()
     except httpx.HTTPStatusError as e:
         print(HTTPException(status_code=e.response.status_code, detail="Не удалось запустить поток"))

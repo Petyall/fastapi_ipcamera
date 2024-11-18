@@ -34,24 +34,27 @@ var (
 )
 
 func startFFMPEG(cameraID int, streamURL string) error {
-
 	mux.RLock()
 	info, exists := streams[strconv.Itoa(cameraID)]
 	mux.RUnlock()
 
-	if exists && info.viewCount > 0 {
+	if exists {
 		info.mux.Lock()
-		info.viewCount++
-		info.mux.Unlock()
-		fmt.Printf("К просмотру RTSP потока %d присоединился новый человек\n", cameraID)
-		return nil
+		defer info.mux.Unlock()
+
+		// Проверяем, запущен ли процесс
+		if info.process != nil && info.process.ProcessState == nil {
+			info.viewCount++
+			fmt.Printf("К просмотру RTSP потока %d присоединился новый человек\n", cameraID)
+			return nil
+		}
+
+		// Процесс завершился или неактивен
+		fmt.Printf("Перезапуск трансляции RTSP потока камеры %d\n", cameraID)
+		info.viewCount = 0
 	}
 
-	if exists {
-		fmt.Printf("Перезапуск трансляции RTSP потока камеры %d\n", cameraID)
-	} else {
-		fmt.Printf("Начало трансляции RTSP потока камеры %d\n", cameraID)
-	}
+	fmt.Printf("Начало трансляции RTSP потока камеры %d\n", cameraID)
 
 	dirPath := filepath.Join("streams", "camera_"+strconv.Itoa(cameraID))
 	if err := os.MkdirAll(dirPath, os.ModePerm); err != nil {
@@ -68,6 +71,7 @@ func startFFMPEG(cameraID int, streamURL string) error {
 	}
 
 	mux.Lock()
+	defer mux.Unlock()
 	if !exists {
 		streams[strconv.Itoa(cameraID)] = &streamInfo{
 			process:   cmd,
@@ -77,7 +81,6 @@ func startFFMPEG(cameraID int, streamURL string) error {
 		info.process = cmd
 		info.viewCount = 1
 	}
-	mux.Unlock()
 
 	filePath := "./streams/camera_" + strconv.Itoa(cameraID) + "/index.m3u8"
 	for i := 0; i < 30; i++ {
@@ -147,16 +150,18 @@ func get_camera(id int, db *sql.DB) (Camera, error) {
 	return camera, nil
 }
 
-// func AllowOnlyLocalhost(c *gin.Context) {
-// 	remoteAddr := c.Request.RemoteAddr
-// 	if !strings.HasPrefix(remoteAddr, "127.0.0.1:8000") && !strings.HasPrefix(remoteAddr, "[::1]:8000") {
-// 		c.JSON(http.StatusForbidden, gin.H{"error": "Доступ разрешён только с localhost:8000"})
-// 		c.Abort()
-// 		return
-// 	}
+func check_user_camera(camera_id int, user_id string, db *sql.DB) (bool, error) {
+	query := "SELECT camera_id FROM user_cameras WHERE camera_id = $1 AND user_id = $2"
 
-// 	c.Next()
-// }
+	row := db.QueryRow(query, camera_id, user_id)
+
+	err := row.Scan(&camera_id)
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
+}
 
 func main() {
 	err := godotenv.Load()
@@ -192,11 +197,25 @@ func main() {
 	r.StaticFile("/", "./index.html")
 	r.StaticFS("/streams", http.Dir("./streams"))
 
-	r.POST("/start/:cameraID", func(c *gin.Context) {
+	r.POST("/start/:cameraID", AuthMiddleware(), func(c *gin.Context) {
+		userID, _ := c.Get("user_id")
+		fmt.Println(">>>>>>>>>>>>>>>>", userID)
+
 		cameraIDStr := c.Param("cameraID")
 		cameraID, err := strconv.Atoi(cameraIDStr)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Неверный ID камеры"})
+			return
+		}
+		fmt.Println(">>>>>>>>>>>>>>>>", cameraID)
+		user_check, err := check_user_camera(cameraID, userID.(string), db)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Ошибка при проверке пользователя"})
+			return
+		}
+		fmt.Println(">>>>>>>>>>>>>>>>", user_check)
+		if !user_check {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Недостаточно прав"})
 			return
 		}
 
