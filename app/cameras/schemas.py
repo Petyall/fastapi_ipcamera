@@ -19,6 +19,25 @@ class CameraPublic(BaseModel):
         orm_mode = True
 
 
+class URLStreamDetails(BaseModel):
+    stream_type: str
+    user: str
+    password: str
+    url: str
+    port: int
+    args: str
+
+
+class CameraAdmin(BaseModel):
+    id: int
+    name: str
+    stream_url: str|list[URLStreamDetails]
+    location: str
+
+    class Config:
+        orm_mode = True
+
+
 class CameraUpdate(BaseModel):
     name: Optional[str] = None
     stream_url: Optional[str] = None

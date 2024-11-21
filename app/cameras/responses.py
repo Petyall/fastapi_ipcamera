@@ -1,7 +1,7 @@
 from typing import List
 from pydantic import BaseModel
 
-from app.cameras.schemas import CameraPublic, UserCameraBase, FavoriteCameraBase
+from app.cameras.schemas import CameraPublic, UserCameraBase, FavoriteCameraBase, CameraAdmin
 
 
 class CameraResponse(BaseModel):
@@ -12,9 +12,14 @@ class CamerasResponse(BaseModel):
     cameras: List[CameraPublic]
 
 
+class AdminCamerasResponse(BaseModel):
+    cameras: List[CameraAdmin]
+
+
 class UserCamerasResponse(BaseModel):
     cameras: List[UserCameraBase]
 
 
 class UserFavoritesCamerasResponse(BaseModel):
     cameras: List[FavoriteCameraBase]
+    

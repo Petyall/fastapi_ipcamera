@@ -2,13 +2,14 @@ from uuid import UUID
 from datetime import datetime
 from fastapi import APIRouter, Depends, status
 
-from app.users.schemas import User as UserSchema
-from app.authorization.dependencies import get_current_user, check_is_current_user_admin
 from app.users.services import UserService
+from app.cameras.utils import parse_rtsp_url
+from app.users.schemas import User as UserSchema
+from app.stream.url_encryption import encrypt_stream_url, decrypt_stream_url
+from app.authorization.dependencies import get_current_user, check_is_current_user_admin
 from app.cameras.services import CameraService, UserCameraService, UserFavoriteCameraService
-from app.cameras.schemas import CameraCreate, CameraUpdate, CameraPublic, UserCameraBase
-from app.stream.url_encryption import encrypt_stream_url
-from app.cameras.responses import CamerasResponse, CameraResponse, UserCamerasResponse
+from app.cameras.schemas import CameraCreate, CameraUpdate, CameraPublic, UserCameraBase, URLStreamDetails, CameraAdmin
+from app.cameras.responses import CamerasResponse, CameraResponse, UserCamerasResponse, AdminCamerasResponse
 from app.exceptions import (
     UserAlreadyHasAccessToThisCameraException,
     UserCamerasNotFoundException, 
@@ -39,14 +40,43 @@ async def add_camera(camera_data: CameraCreate, current_user: UserSchema = Depen
     return {"cameras": cameras}
 
 
-@router.get("/all", response_model=CamerasResponse, status_code=status.HTTP_200_OK)
+@router.get("/all", response_model=AdminCamerasResponse, status_code=status.HTTP_200_OK)
 async def get_all_cameras(current_user: UserSchema = Depends(check_is_current_user_admin)):
     """
     Получение всех камер (у пользователя должна быть роль администратора и выше)
     """
     cameras = await CameraService.find_all()
 
-    return {"cameras": cameras}
+    cameras_list = []
+    for camera in cameras:
+        decrypted_url = decrypt_stream_url(camera.stream_url)
+        parsed_url = parse_rtsp_url(decrypted_url)
+        if parsed_url:
+
+            stream_details = URLStreamDetails(
+                stream_type="rtsp",
+                user=parsed_url["user"],
+                password="*" * len(parsed_url["password"]),
+                url=parsed_url["url"],
+                port=int(parsed_url["port"]),
+                args=parsed_url["args"],
+            )
+
+            cameras_list.append(CameraAdmin(
+                id=camera.id,
+                name=camera.name,
+                stream_url=[stream_details],
+                location=camera.location
+            ))
+        else:
+            cameras_list.append(CameraAdmin(
+                id=camera.id,
+                name=camera.name,
+                stream_url=decrypted_url,
+                location=camera.location
+            ))    
+
+    return {"cameras": cameras_list}
 
 
 @router.get("/{camera_id}", response_model=CameraResponse, status_code=status.HTTP_200_OK)
@@ -62,7 +92,7 @@ async def get_camera_by_id(camera_id: int, current_user: UserSchema = Depends(ch
 
 
 @router.get("/users/{user_id}", response_model=UserCamerasResponse, status_code=status.HTTP_200_OK)
-async def get_cameras_by_user(user_id: UUID, current_user: UserSchema = Depends(check_is_current_user_admin)):  
+async def get_all_cameras_by_user(user_id: UUID, current_user: UserSchema = Depends(check_is_current_user_admin)):  
     """
     Получение камер, закрепленных за пользователем (должна быть роль администратора и выше)
     """ 
