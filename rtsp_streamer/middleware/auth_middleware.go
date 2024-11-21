@@ -1,10 +1,10 @@
-package main
+package middleware
 
 import (
 	"errors"
-	"fmt"
+	"log"
 	"net/http"
-	"os"
+	"rtsp_streamer/config"
 	"strings"
 	"time"
 
@@ -12,48 +12,52 @@ import (
 	"github.com/golang-jwt/jwt/v4"
 )
 
-var SECRET_KEY = []byte(os.Getenv("SECRET_KEY"))
+var SECRET_KEY = []byte(config.GetEnv("SECRET_KEY"))
 
 func AuthMiddleware() gin.HandlerFunc {
-	fmt.Println("Используем секретный ключ:", SECRET_KEY)
 	return func(c *gin.Context) {
+		log.Println("AuthMiddleware - Пользователь начал авторизацию")
 		// Извлечение токена из заголовка Authorization
 		authHeader := c.GetHeader("Authorization")
-		fmt.Println("Заголовок авторизации:", authHeader)
 		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
+			log.Println("AuthMiddleware - Токен отсутствует либо неверный")
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Токен отсутствует или неверен"})
 			return
 		}
+		log.Println("AuthMiddleware - Найден JWT токен")
 
 		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-		fmt.Println("Токен:", tokenString)
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 			// Проверка алгоритма подписи
 			if token.Method != jwt.SigningMethodHS256 {
+				log.Println("AuthMiddleware - В токене неподдерживаемый метод подписи")
 				return nil, errors.New("неподдерживаемый метод подписи")
 			}
+			log.Println("AuthMiddleware - В токене подходящая подпись")
 			return SECRET_KEY, nil
 		})
 
 		if err != nil || !token.Valid {
-			fmt.Println("Ошибка при проверке токена:", err)
+			log.Printf("AuthMiddleware - Ошибка при проверке токена %s", err)
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Недействительный токен"})
 			return
 		}
-		fmt.Println("Токен проверен успешно")
+		log.Println("AuthMiddleware - Токен проверен успешно")
 
 		// Проверка срока действия токена
 		if claims, ok := token.Claims.(jwt.MapClaims); ok {
 			exp, ok := claims["exp"].(float64)
 			if !ok || time.Now().Unix() > int64(exp) {
+				log.Println("AuthMiddleware - Срок действия токена истёк")
 				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Токен истёк"})
 				return
 			}
 
 			// Сохранение user_id в контексте для дальнейшего использования
 			c.Set("user_id", claims["sub"])
-			fmt.Println("Пользователь записан в контекст")
+			log.Printf("AuthMiddleware - Успешно авторизирован пользователь %d", claims["sub"])
 		} else {
+			log.Println("AuthMiddleware - Неверный формат токена")
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Неверный формат токена"})
 			return
 		}
