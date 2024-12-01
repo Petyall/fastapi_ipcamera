@@ -18,24 +18,44 @@ type streamInfo struct {
 }
 
 var (
-	streams       = make(map[string]*streamInfo)
-	mux           sync.RWMutex
-	activeViewers = make(map[string]int) // viewerID -> cameraID
+	streams           = make(map[string]*streamInfo)
+	mux               sync.RWMutex
+	userStreamHistory = make(map[string]map[string]time.Time) // История потоков
+	historyMux        sync.Mutex
 )
 
 func StartFFMPEG(cameraID int, streamURL, viewerID string) error {
-	mux.Lock()
+	// Получаем текущую историю пользователя
+	userHistory := GetUserStreamHistory(viewerID)
+	if len(userHistory) >= 4 {
+		// Если пользователь уже смотрит 4 камеры, удаляем самую старую
+		var oldestCameraID string
+		var oldestTime time.Time
 
-	// Проверяем, смотрит ли пользователь другой поток
-	if oldCameraID, watching := activeViewers[viewerID]; watching && oldCameraID != cameraID {
-		log.Printf("StartFFMPEG - Пользователь %s уже смотрит поток камеры %d, отключаем...\n", viewerID, oldCameraID)
-		mux.Unlock() // Освобождаем мьютекс для вызова stopFFMPEG
-		if err := StopFFMPEG(oldCameraID, viewerID); err != nil {
-			log.Printf("StartFFMPEG - Не удалось отключить пользователя %s от камеры %d: %v", viewerID, oldCameraID, err)
-			return fmt.Errorf("ошибка отключения зрителя %s от камеры %d: %v", viewerID, oldCameraID, err)
+		for camID, startTime := range userHistory {
+			if oldestCameraID == "" || startTime.Before(oldestTime) {
+				oldestCameraID = camID
+				oldestTime = startTime
+			}
 		}
-		mux.Lock() // Возвращаем блокировку для продолжения
+
+		if oldestCameraID != "" {
+			oldestCamIDInt, err := strconv.Atoi(oldestCameraID)
+			if err != nil {
+				log.Printf("StartFFMPEG - Ошибка преобразования ID камеры %s в int: %v", oldestCameraID, err)
+				return fmt.Errorf("ошибка преобразования ID камеры %s в int: %v", oldestCameraID, err)
+			}
+
+			log.Printf("StartFFMPEG - Удаление самого старого потока камеры %s для пользователя %s\n", oldestCameraID, viewerID)
+			if err := StopFFMPEG(oldestCamIDInt, viewerID); err != nil {
+				log.Printf("StartFFMPEG - Ошибка остановки самого старого потока камеры %s: %v", oldestCameraID, err)
+				return fmt.Errorf("ошибка остановки потока камеры %s: %v", oldestCameraID, err)
+			}
+		}
 	}
+
+	// Запускаем новый поток
+	mux.Lock()
 
 	info, exists := streams[strconv.Itoa(cameraID)]
 	if exists {
@@ -47,7 +67,9 @@ func StartFFMPEG(cameraID int, streamURL, viewerID string) error {
 			if _, alreadyViewing := info.viewers[viewerID]; !alreadyViewing {
 				info.viewers[viewerID] = true
 				log.Printf("StartFFMPEG - Пользователь %s присоединился к просмотру RTSP потока %d\n", viewerID, cameraID)
-				activeViewers[viewerID] = cameraID
+
+				// Обновляем историю просмотров
+				updateStreamHistory(viewerID, strconv.Itoa(cameraID))
 			} else {
 				log.Printf("StartFFMPEG - Пользователь %s уже подключен к RTSP потоку %d\n", viewerID, cameraID)
 			}
@@ -90,7 +112,9 @@ func StartFFMPEG(cameraID int, streamURL, viewerID string) error {
 		info.viewers = map[string]bool{viewerID: true}
 	}
 
-	activeViewers[viewerID] = cameraID
+	// Обновляем историю просмотров
+	updateStreamHistory(viewerID, strconv.Itoa(cameraID))
+
 	mux.Unlock()
 
 	filePath := "./streams/camera_" + strconv.Itoa(cameraID) + "/index.m3u8"
@@ -105,6 +129,10 @@ func StartFFMPEG(cameraID int, streamURL, viewerID string) error {
 
 	if _, err := os.Stat(filePath); err != nil {
 		log.Printf("StartFFMPEG - Для файла ./streams/camera_%s/index.m3u8 превышено время ожидания", strconv.Itoa(cameraID))
+		if err := StopFFMPEG(cameraID, viewerID); err != nil {
+			log.Printf("StartFFMPEG - Не удалось отключить пользователя %s от камеры %d: %v", viewerID, cameraID, err)
+			return fmt.Errorf("ошибка отключения зрителя %s от камеры %d: %v", viewerID, cameraID, err)
+		}
 		return fmt.Errorf("время ожидания для файла %s превышено", filePath)
 	}
 
@@ -127,7 +155,10 @@ func StopFFMPEG(cameraID int, viewerID string) error {
 	// Удаляем зрителя
 	if _, viewerExists := info.viewers[viewerID]; viewerExists {
 		delete(info.viewers, viewerID)
-		delete(activeViewers, viewerID)
+
+		// Удаляем запись из истории
+		removeStreamHistory(viewerID, strconv.Itoa(cameraID))
+
 		log.Printf("StopFFMPEG - Пользователь %s отключился от камеры %d\n", viewerID, cameraID)
 	} else {
 		log.Printf("StopFFMPEG - Пользователь %s не найден в списке зрителей для камеры %d", viewerID, cameraID)
@@ -153,3 +184,55 @@ func StopFFMPEG(cameraID int, viewerID string) error {
 
 	return nil
 }
+
+// Функция для обновления истории
+func updateStreamHistory(userID, cameraID string) {
+	historyMux.Lock()
+	defer historyMux.Unlock()
+
+	if _, exists := userStreamHistory[userID]; !exists {
+		userStreamHistory[userID] = make(map[string]time.Time)
+	}
+	userStreamHistory[userID][cameraID] = time.Now()
+}
+
+// Функция для удаления истории
+func removeStreamHistory(userID, cameraID string) {
+	historyMux.Lock()
+	defer historyMux.Unlock()
+
+	if userCameras, exists := userStreamHistory[userID]; exists {
+		delete(userCameras, cameraID)
+		if len(userCameras) == 0 {
+			delete(userStreamHistory, userID)
+		}
+	}
+}
+
+// Функция для получения истории пользователя
+func GetUserStreamHistory(userID string) map[string]time.Time {
+	historyMux.Lock()
+	defer historyMux.Unlock()
+
+	if history, exists := userStreamHistory[userID]; exists {
+		return history
+	}
+	return nil
+}
+
+// func printLogs() {
+// 	ticker := time.NewTicker(time.Second)
+// 	go func() {
+// 		for range ticker.C {
+// 			mux.Lock()
+// 			log.Println("???????????????", GetUserStreamHistory("8ef9f2af-a1c1-4009-9306-118174b3e96f"))
+// 			log.Println("<<<<<<<<<<<<<<<", streams)
+// 			log.Println(">>>>>>>>>>>>>>>", userStreamHistory)
+// 			mux.Unlock()
+// 		}
+// 	}()
+// }
+
+// func init() {
+// 	printLogs()
+// }
