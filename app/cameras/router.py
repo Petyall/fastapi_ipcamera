@@ -3,13 +3,13 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, status
 
 from app.users.services import UserService
-from app.cameras.utils import parse_rtsp_url
+from app.cameras.utils import cameras_list_formatter, handle_stream_url, format_camera
 from app.users.schemas import User as UserSchema
-from app.stream.url_encryption import encrypt_stream_url, decrypt_stream_url
+from app.stream.url_encryption import encrypt_stream_url
 from app.authorization.dependencies import get_current_user, check_is_current_user_admin
 from app.cameras.services import CameraService, UserCameraService, UserFavoriteCameraService
-from app.cameras.schemas import CameraCreate, CameraUpdate, CameraPublic, UserCameraBase, URLStreamDetails, CameraAdmin
-from app.cameras.responses import CamerasResponse, CameraResponse, UserCamerasResponse, AdminCamerasResponse
+from app.cameras.schemas import CameraCreate, CameraUpdate, UserCameraBase
+from app.cameras.responses import AdminCameraResponse, CamerasResponse, CameraResponse, UserCamerasResponse, AdminCamerasResponse
 from app.exceptions import (
     UserAlreadyHasAccessToThisCameraException,
     UserCamerasNotFoundException, 
@@ -46,35 +46,7 @@ async def get_all_cameras(current_user: UserSchema = Depends(check_is_current_us
     Получение всех камер (у пользователя должна быть роль администратора и выше)
     """
     cameras = await CameraService.find_all()
-
-    cameras_list = []
-    for camera in cameras:
-        decrypted_url = decrypt_stream_url(camera.stream_url)
-        parsed_url = parse_rtsp_url(decrypted_url)
-        if parsed_url:
-
-            stream_details = URLStreamDetails(
-                stream_type="rtsp",
-                user=parsed_url["user"],
-                password="*" * len(parsed_url["password"]),
-                url=parsed_url["url"],
-                port=int(parsed_url["port"]),
-                args=parsed_url["args"],
-            )
-
-            cameras_list.append(CameraAdmin(
-                id=camera.id,
-                name=camera.name,
-                stream_url=[stream_details],
-                location=camera.location
-            ))
-        else:
-            cameras_list.append(CameraAdmin(
-                id=camera.id,
-                name=camera.name,
-                stream_url=decrypted_url,
-                location=camera.location
-            ))    
+    cameras_list = cameras_list_formatter(cameras)
 
     return {"cameras": cameras_list}
 
@@ -87,7 +59,7 @@ async def get_camera_by_id(camera_id: int, current_user: UserSchema = Depends(ch
     camera = await CameraService.find_one_or_none(id=camera_id)
     if not camera:
         raise UserCameraNotFoundException
-    
+
     return {"camera": camera}
 
 
@@ -128,7 +100,7 @@ async def delete_camera(camera_id: int, confirm: bool = False, current_user: Use
     return {"success": True}
 
 
-@router.patch("/{camera_id}", response_model=dict|CameraPublic, status_code=status.HTTP_200_OK)
+@router.patch("/{camera_id}", response_model=dict|AdminCameraResponse, status_code=status.HTTP_200_OK)
 async def edit_camera(camera_id: int, camera_data: CameraUpdate, current_user: UserSchema = Depends(check_is_current_user_admin)):
     """
     Редактирование камеры (у пользователя должна быть роль администратора и выше)
@@ -137,23 +109,22 @@ async def edit_camera(camera_id: int, camera_data: CameraUpdate, current_user: U
     if not camera:
         raise UserCameraNotFoundException
     
-    update_data = {k: v for k, v in camera_data.dict(exclude_unset=True).items() if v != ""}
+    update_data = {key: value for key, value in camera_data.dict(exclude_unset=True).items() if value != ""}
     
     if not update_data:
         return {"detail": "Нет данных для обновления"}
     
     update_data['updated_at'] = datetime.utcnow()
 
-    if update_data['stream_url']:
-        update_data['stream_url'] = encrypt_stream_url(update_data['stream_url'])
+    if 'stream_url' in update_data:
+        update_data['stream_url'] = await handle_stream_url(update_data['stream_url'], camera.stream_url)
 
     updated_camera = await CameraService.update(id=camera_id, **update_data)
-
     if updated_camera:
         camera = await CameraService.find_by_id(camera_id)
-        return camera
-    else:
-        return {"success": False}
+        return format_camera(camera)
+    
+    return {"success": False}
 
 
 @router.post("/user/add_camera", response_model=dict, status_code=status.HTTP_201_CREATED)

@@ -40,7 +40,7 @@ class CameraAdmin(BaseModel):
 
 class CameraUpdate(BaseModel):
     name: Optional[str] = None
-    stream_url: Optional[str] = None
+    stream_url: Optional[list[URLStreamDetails]|str] = None
     location: Optional[str] = None
 
     class Config:

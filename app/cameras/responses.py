@@ -12,6 +12,10 @@ class CamerasResponse(BaseModel):
     cameras: List[CameraPublic]
 
 
+class AdminCameraResponse(BaseModel):
+    cameras: CameraAdmin
+
+
 class AdminCamerasResponse(BaseModel):
     cameras: List[CameraAdmin]
 

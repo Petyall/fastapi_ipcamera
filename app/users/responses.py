@@ -9,4 +9,4 @@ class UserResponse(BaseModel):
 
 
 class UsersResponse(BaseModel):
-    users: List[UserPublic]
+    users: List[User]
